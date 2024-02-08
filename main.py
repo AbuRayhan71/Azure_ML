@@ -1,42 +1,30 @@
-from azureml.core import Workspace, Dataset, Experiment
-from azureml.train.recommendation import Recommendation
-from azureml.core.model import Model
-from azureml.core.webservice import AciWebservice, Webservice
+from azure.storage.blob import BlobServiceClient
+import os
 
-def main():
-    # Connecting to  Azure ML workspace
-    workspace = Workspace.from_config()
+connect_str = 'YOUR_AZURE_STORAGE_CONNECTION_STRING'
 
-    # Loading the data
-    datastore = workspace.get_default_datastore()
-    dataset = Dataset.Tabular.from_delimited_files(path=(datastore, 'path_to_your_dataset.csv'))
 
-    # Spliting the  data into training and test sets
-    train_data, test_data = dataset.random_split(percentage=0.8, seed=123)
+container_url = 'https://internaiextraction.blob.core.windows.net/internaiextractionblob'
+file_path = 'C:\\Users\\abura\\Downloads\\event_epl (1).csv'
+ 
+blob_name = 'events.csv' 
 
-    # example
-    experiment = Experiment(workspace=workspace, name='event_recommendation_experiment')
+# Create the BlobServiceClient object
+blob_service_client = BlobServiceClient.from_connection_string(connect_str)
 
-    # recommendation model
-    recommendation = Recommendation(source_directory='.', 
-                                    compute_target='your_compute_target',
-                                    rating_column_name='rating',
-                                    user_column_name='user_id', 
-                                    item_column_name='event_id')
-    run = experiment.submit(recommendation)
+container_client = blob_service_client.get_container_client(container_url)
 
-    # Monitor your run
-    run.wait_for_completion(show_output=True)
 
-    # Register the model
-    model = run.register_model(model_name='event_recommendation_model', model_path='outputs/model/')
+try:
+    container_client.get_container_properties()
+except Exception as e:
+    container_client.create_container()
 
-    # Define the deployment configuration
-    deployment_config = AciWebservice.deploy_configuration(cpu_cores=1, memory_gb=1)
 
-    # Deploy the model as a web service
-    service = Model.deploy(workspace, "eventrecommendationservice", [model], deployment_config=deployment_config)
-    service.wait_for_deployment(show_output=True)
+blob_client = blob_service_client.get_blob_client(container=container_url, blob=blob_name)
 
-if __name__ == "__main__":
-    main()
+
+with open(file_path, "rb") as data:
+    blob_client.upload_blob(data, overwrite=True)
+
+print(f"File {file_path} uploaded to {container_url}/{blob_name}")
